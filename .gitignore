@@ -1,0 +1,65 @@
+# Node.js dependencies
+node_modules/
+npm-debug.log
+yarn-error.log
+yarn.lock
+package-lock.json
+
+# Build output
+dist/
+build/
+public/build/
+
+# Environment variables
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Sensitive configuration files
+config/database.yml
+*.key
+*.pem
+
+# Logs
+logs/
+*.log
+*.log.*
+
+# Temporary files
+tmp/
+*.tmp
+*.bak
+*.swp
+
+# Editor files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Testing
+coverage/
+*.lcov
+
+# Build artifacts for React
+/public/static/js/*
+/public/static/css/*
+/public/static/media/*
+!/public/static/js/*.js
+!/public/static/css/*.css
+!/public/static/media/*.*
+
+# Database dumps
+*.sql
+*.dump
+
+# Miscellaneous
+*.pid
+*.seed
+*.rdb
