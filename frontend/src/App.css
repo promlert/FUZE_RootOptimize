@@ -1,0 +1,32 @@
+/* ปรับแต่งตาราง */
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th, td {
+  text-align: left;
+  padding: 16px;
+}
+
+tr:nth-child(even) {
+  background-color: #f9fafb;
+}
+
+/* ปรับแต่ง input */
+input:focus {
+  outline: none;
+}
+
+/* ปรับแต่งปุ่ม */
+button {
+  transition: background-color 0.2s ease-in-out;
+}
+
+/* ปรับแต่ง pre สำหรับ JSON */
+pre {
+  font-family: monospace;
+  font-size: 0.9rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
