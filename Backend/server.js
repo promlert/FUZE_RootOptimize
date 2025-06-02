@@ -10,9 +10,9 @@ const NEXTBILLION_API_KEY = '678c1cacb26447169219a90759b11cbc';
 // การตั้งค่า PostgreSQL
 const pool = new Pool({
   user: 'postgres', // แทนที่ด้วย username ของ PostgreSQL
-  host: 'localhost',
+  host: '159.65.3.230',
   database: 'route_optimization',
-  password: 'changeme', // แทนที่ด้วย password ของ PostgreSQL
+  password: 'P@ssw0rdApp', // แทนที่ด้วย password ของ PostgreSQL
   port: 5432
 });
 
