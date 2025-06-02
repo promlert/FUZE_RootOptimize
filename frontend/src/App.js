@@ -45,28 +45,69 @@ function App() {
   useEffect(() => {
     loadData();
   }, []);
+const loadData = async () => {
+  try {
+    const [jobsResponse, vehiclesResponse, resultsResponse] = await Promise.all([
+      axios.get('http://localhost:3000/api/jobs'),
+      axios.get('http://localhost:3000/api/vehicles'),
+      axios.get('http://localhost:3000/api/results'),
+    ]);
+    console.log('Loaded Jobs:', JSON.stringify(jobsResponse.data, null, 2));
+    console.log('Loaded Vehicles:', JSON.stringify(vehiclesResponse.data, null, 2));
+    console.log('Loaded Results:', JSON.stringify(resultsResponse.data, null, 2));
 
-  const loadData = async () => {
-    try {
-      const [jobsResponse, vehiclesResponse, resultsResponse] = await Promise.all([
-        axios.get('http://localhost:3000/api/jobs'),
-        axios.get('http://localhost:3000/api/vehicles'),
-        axios.get('http://localhost:3000/api/results'),
-      ]);
-      setJobs(jobsResponse.data);
-      setVehicles(vehiclesResponse.data);
-      setResultsHistory(resultsResponse.data);
-      if (jobsResponse.data.length > 0) {
-        setMapCenter({
-          lat: parseFloat(jobsResponse.data[0].latitude),
-          lng: parseFloat(jobsResponse.data[0].longitude),
-        });
-      }
-      setError(null);
-    } catch (err) {
-      setError('ไม่สามารถโหลดข้อมูลได้: ' + err.message);
+    const validJobs = jobsResponse.data.filter(
+      (job) =>
+        job.id &&
+        !isNaN(parseFloat(job.latitude)) &&
+        !isNaN(parseFloat(job.longitude)) &&
+        !isNaN(parseInt(job.service_time)) &&
+        !isNaN(parseInt(job.time_window_start)) &&
+        !isNaN(parseInt(job.time_window_end))
+    );
+    const validVehicles = vehiclesResponse.data.filter(
+      (vehicle) =>
+        vehicle.id &&
+        !isNaN(parseInt(vehicle.capacity)) &&
+        !isNaN(parseInt(vehicle.shift_start)) &&
+        !isNaN(parseInt(vehicle.shift_end)) &&
+        (!vehicle.start_location_lat || !isNaN(parseFloat(vehicle.start_location_lat))) &&
+        (!vehicle.start_location_lon || !isNaN(parseFloat(vehicle.start_location_lon)))
+    );
+
+    if (validJobs.length === 0) {
+      console.warn('No valid jobs found');
+      setError('ไม่มีงานที่มีพิกัดถูกต้อง กรุณาเพิ่มงานใหม่');
     }
-  };
+    if (validVehicles.length === 0) {
+      console.warn('No valid vehicles found');
+      setError((prev) => prev ? `${prev}, ไม่มียานพาหนะที่มีข้อมูลถูกต้อง` : 'ไม่มียานพาหนะที่มีข้อมูลถูกต้อง');
+    }
+
+    setJobs(validJobs);
+    setVehicles(validVehicles);
+    setResultsHistory(resultsResponse.data || []);
+    if (validJobs.length > 0) {
+      setMapCenter({
+        lat: parseFloat(validJobs[0].latitude),
+        lng: parseFloat(validJobs[0].longitude),
+      });
+    } else {
+      setMapCenter({ lat: 13.7367, lng: 100.5231 }); // Default: Bangkok
+    }
+    if (!validJobs.length && !validVehicles.length) {
+      setError('ไม่มีข้อมูลงานหรือยานพาหนะที่ถูกต้องในระบบ');
+    } else {
+      setError('');
+    }
+  } catch (err) {
+    setError('ไม่สามารถโหลดข้อมูลได้: ' + err.message);
+    console.error('Load data error:', err);
+    setJobs([]);
+    setVehicles([]);
+    setResultsHistory([]);
+  }
+};
 
   // จัดการการเปลี่ยนแปลงฟอร์มงาน
   const handleJobChange = (e) => {
@@ -208,32 +249,69 @@ function App() {
   };
 
   // เพิ่มประสิทธิภาพเส้นทาง
-  const optimizeRoutes = async () => {
-    if (jobs.length === 0 || vehicles.length === 0) {
-      setError('ต้องมีงานและยานพาหนะอย่างน้อย 1 รายการ');
-      return;
-    }
-    const payload = {
-      jobs,
-      vehicles,
-      options: {
-        max_waiting_time: parseInt(options.max_waiting_time) || 300,
-        ...(options.max_tasks && { max_tasks: parseInt(options.max_tasks) }),
-      },
-    };
+const optimizeRoutes = async () => {
+  if (jobs.length === 0 || vehicles.length === 0) {
+    setError('ต้องมีงานและยานพาหนะอย่างน้อย 1 รายการ');
+    console.warn('No jobs or vehicles to optimize');
+    return;
+  }
 
-    try {
-      const response = await axios.post('http://localhost:3000/api/optimize', payload);
-      setApiResponse(response.data);
-      setSuccess('เพิ่มประสิทธิภาพเส้นทางสำเร็จ');
-      setError(null);
-      loadData();
-    } catch (err) {
-      setError('เพิ่มประสิทธิภาพล้มเหลว: ' + err.message);
-      setSuccess(null);
-      setApiResponse(null);
-    }
+  // Validate jobs
+  const invalidJobs = jobs.filter(
+    (job) =>
+      !job.id ||
+      isNaN(parseFloat(job.latitude)) ||
+      isNaN(parseFloat(job.longitude)) ||
+      isNaN(parseInt(job.service_time)) ||
+      isNaN(parseInt(job.time_window_start)) ||
+      isNaN(parseInt(job.time_window_end))
+  );
+  if (invalidJobs.length > 0) {
+    setError(`งานไม่ถูกต้อง: ${invalidJobs.map((j) => j.id).join(', ')}`);
+    console.error('Invalid jobs:', JSON.stringify(invalidJobs, null, 2));
+    return;
+  }
+
+  // Validate vehicles
+  const invalidVehicles = vehicles.filter(
+    (vehicle) =>
+      !vehicle.id ||
+      isNaN(parseInt(vehicle.capacity)) ||
+      isNaN(parseInt(vehicle.shift_start)) ||
+      isNaN(parseInt(vehicle.shift_end)) ||
+      (vehicle.start_location_lat && isNaN(parseFloat(vehicle.start_location_lat))) ||
+      (vehicle.start_location_lon && isNaN(parseFloat(vehicle.start_location_lon)))
+  );
+  if (invalidVehicles.length > 0) {
+    setError(`ยานพาหนะไม่ถูกต้อง: ${invalidVehicles.map((v) => v.id).join(', ')}`);
+    console.error('Invalid vehicles:', JSON.stringify(invalidVehicles, null, 2));
+    return;
+  }
+
+  const payload = {
+    jobs,
+    vehicles,
+    options: {
+      max_waiting_time: parseInt(options.max_waiting_time) || 300,
+      ...(options.max_tasks && { max_tasks: parseInt(options.max_tasks) }),
+    },
   };
+  console.log('Sending payload to /api/optimize:', JSON.stringify(payload, null, 2));
+
+  try {
+    const response = await axios.post('http://localhost:3000/api/optimize', payload);
+    console.log('Optimization response:', JSON.stringify(response.data, null, 2));
+    setApiResponse(response.data);
+    setSuccess('เพิ่มประสิทธิภาพเส้นทางสำเร็จ');
+    setError(null);
+    loadData();
+  } catch (err) {
+    setError('เพิ่มประสิทธิภาพล้มเหลว: ' + (err.response?.data?.details || err.message));
+    console.error('Optimize error:', err.response?.data || err);
+    setSuccess(null);
+    setApiResponse(null);
+  }
+};
 
   // แปลงผลลัพธ์เป็นพิกัดสำหรับ Google Maps Polyline
   const getRoutePolylines = () => {
