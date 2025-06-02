@@ -114,7 +114,6 @@ app.post('/api/optimize', async (req, res) => {
     const locationsArray = [];
     let locationIndex = 0;
 
-    // Process job locations
     for (const job of jobs) {
       if (!job.latitude || !job.longitude) {
         console.warn(`Job ${job.id} missing coordinates: lat=${job.latitude}, lon=${job.longitude}`);
@@ -126,7 +125,7 @@ app.post('/api/optimize', async (req, res) => {
         console.warn(`Invalid coordinates for job ${job.id}: lat=${job.latitude}, lon=${job.longitude}`);
         continue;
       }
-      const coords = `${lat.toFixed(6)},${lon.toFixed(6)}`; // Format: "lat,lon"
+      const coords = `${lat.toFixed(6)},${lon.toFixed(6)}`;
       const coordsKey = coords;
       if (!locationMap.has(coordsKey)) {
         locationMap.set(coordsKey, locationIndex);
@@ -135,7 +134,6 @@ app.post('/api/optimize', async (req, res) => {
       }
     }
 
-    // Process vehicle locations
     for (const vehicle of vehicles) {
       if (vehicle.start_location_lat && vehicle.start_location_lon) {
         const lat = parseFloat(vehicle.start_location_lat);
@@ -151,26 +149,16 @@ app.post('/api/optimize', async (req, res) => {
           locationsArray.push(coords);
           locationIndex++;
         }
-      } else {
-        console.log(`Vehicle ${vehicle.id} has no start location (optional)`);
       }
     }
 
-    // Validate locations
     if (locationsArray.length === 0) {
       console.error('No valid locations found');
-      return res.status(400).json({
-        error: 'No valid location coordinates provided',
-        details: 'Ensure jobs and vehicles have valid latitude/longitude',
-      });
+      return res.status(400).json({ error: 'No valid location coordinates provided' });
     }
 
-    // Construct locations object
-    const locations = {
-      location: locationsArray,
-    };
+    const locations = { location: locationsArray };
 
-    // Transform jobs
     const transformedJobs = jobs
       .filter((job) => !isNaN(parseFloat(job.latitude)) && !isNaN(parseFloat(job.longitude)))
       .map((job) => {
@@ -186,7 +174,6 @@ app.post('/api/optimize', async (req, res) => {
         };
       });
 
-    // Transform vehicles
     const transformedVehicles = vehicles.map((vehicle) => {
       let startIndex;
       if (vehicle.start_location_lat && vehicle.start_location_lon) {
@@ -205,13 +192,11 @@ app.post('/api/optimize', async (req, res) => {
       };
     });
 
-    // Validate transformed data
     if (transformedJobs.length === 0) {
       console.error('No valid jobs after transformation');
       return res.status(400).json({ error: 'No valid jobs with coordinates' });
     }
 
-    // Construct API payload
     const apiPayload = {
       locations,
       jobs: transformedJobs,
@@ -222,10 +207,9 @@ app.post('/api/optimize', async (req, res) => {
       },
     };
 
-    // Log raw payload
     console.log('Raw payload to Nextbillion API:', JSON.stringify(apiPayload, null, 2));
 
-    // Send POST request to Nextbillion API
+    // Send POST request
     try {
       const postResponse = await axios.post(
         `https://api.nextbillion.io/optimization/v2?key=${NEXTBILLION_API_KEY}`,
@@ -241,18 +225,23 @@ app.post('/api/optimize', async (req, res) => {
       );
       console.log('Nextbillion POST response:', JSON.stringify(postResponse.data, null, 2));
 
-      // Extract job ID
       const jobId = postResponse.data.id;
       if (!jobId) {
         console.error('No job ID in POST response');
         return res.status(500).json({ error: 'No job ID returned from POST request' });
       }
 
-      // Poll GET request for result
+      // Save payload to database
+      await pool.query(
+        'INSERT INTO optimization_requests (job_id, payload) VALUES ($1, $2)',
+        [jobId, apiPayload]
+      );
+
+      // Poll GET request
       let getResponse;
       let attempts = 0;
       const maxAttempts = 10;
-      const delay = 2000; // 2 seconds
+      const delay = 2000;
 
       while (attempts < maxAttempts) {
         try {
@@ -261,25 +250,19 @@ app.post('/api/optimize', async (req, res) => {
             { headers: { 'Content-Type': 'application/json' } }
           );
           console.log('Nextbillion GET response:', JSON.stringify(getResponse.data, null, 2));
-
-          // Check if result is ready
           if (getResponse.data.status === 'Ok' && getResponse.data.result) {
             break;
           }
           console.log(`Result not ready, retrying (${attempts + 1}/${maxAttempts})...`);
         } catch (getError) {
-          console.error('GET request error:', {
-            message: getError.message,
-            status: getError.response?.status,
-            data: getError.response?.data,
-          });
+          console.error('GET request error:', getError.response?.data || getError.message);
         }
         attempts++;
         await new Promise((resolve) => setTimeout(resolve, delay));
       }
 
       if (!getResponse || !getResponse.data.result) {
-        console.error('Failed to retrieve optimization result after max attempts');
+        console.error('Failed to retrieve optimization result');
         return res.status(500).json({ error: 'Failed to retrieve optimization result' });
       }
 
@@ -289,25 +272,28 @@ app.post('/api/optimize', async (req, res) => {
         [getResponse.data]
       );
 
-      res.json(result.rows[0]);
+      res.json({ request: apiPayload, result: result.rows[0] });
     } catch (apiError) {
-      console.error('Nextbillion API error:', {
-        message: apiError.message,
-        status: apiError.response?.status,
-        data: apiError.response?.data,
-      });
+      console.error('Nextbillion API error:', apiError.response?.data || apiError.message);
       return res.status(apiError.response?.status || 500).json({
         error: 'Nextbillion API request failed',
         details: apiError.response?.data || apiError.message,
       });
     }
   } catch (error) {
-    console.error('Error in /api/optimize:', {
-      message: error.message,
-      stack: error.stack,
-      response: error.response ? error.response.data : null,
-    });
-    res.status(500).json({ error: 'Internal server error', details: error.response?.data || error.message });
+    console.error('Error in /api/optimize:', error);
+    res.status(500).json({ error: 'Internal server error', details: error.message });
+  }
+});
+
+// New endpoint to get saved requests
+app.get('/api/requests', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM optimization_requests ORDER BY created_at DESC');
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching requests:', error);
+    res.status(500).json({ error: 'Failed to fetch requests', details: error.message });
   }
 });
 
@@ -320,7 +306,16 @@ app.get('/api/results', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
+// New endpoint to get saved requests
+app.get('/api/requests', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM optimization_requests ORDER BY created_at DESC');
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching requests:', error);
+    res.status(500).json({ error: 'Failed to fetch requests', details: error.message });
+  }
+});
 const PORT = 3000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

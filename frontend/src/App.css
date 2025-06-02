@@ -1,32 +1,30 @@
-/* ปรับแต่งตาราง */
+.App {
+  text-align: center;
+  padding: 20px;
+}
 table {
   width: 100%;
   border-collapse: collapse;
+  margin: 20px 0;
 }
-
 th, td {
-  text-align: left;
-  padding: 16px;
+  border: 1px solid #ddd;
+  padding: 8px;
 }
-
-tr:nth-child(even) {
-  background-color: #f9fafb;
+th {
+  background-color: #f2f2f2;
 }
-
-/* ปรับแต่ง input */
-input:focus {
-  outline: none;
+.map-container {
+  height: 400px;
+  width: 100%;
 }
-
-/* ปรับแต่งปุ่ม */
 button {
-  transition: background-color 0.2s ease-in-out;
+  padding: 10px 20px;
+  margin: 10px;
 }
-
-/* ปรับแต่ง pre สำหรับ JSON */
 pre {
-  font-family: monospace;
-  font-size: 0.9rem;
-  white-space: pre-wrap;
-  word-break: break-word;
+  text-align: left;
+  background: #f4f4f4;
+  padding: 10px;
+  overflow-x: auto;
 }

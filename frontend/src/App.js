@@ -13,6 +13,7 @@ const mapContainerStyle = {
 function App() {
   const [jobs, setJobs] = useState([]);
   const [vehicles, setVehicles] = useState([]);
+  const [requests, setRequests] = useState([]);
   const [jobForm, setJobForm] = useState({
     id: '',
     latitude: '',
@@ -47,15 +48,16 @@ function App() {
   }, []);
 const loadData = async () => {
   try {
-    const [jobsResponse, vehiclesResponse, resultsResponse] = await Promise.all([
+    const [jobsResponse, vehiclesResponse, resultsResponse , requestsResponse] = await Promise.all([
       axios.get('http://localhost:3000/api/jobs'),
       axios.get('http://localhost:3000/api/vehicles'),
       axios.get('http://localhost:3000/api/results'),
+      axios.get('http://localhost:3000/api/requests'),
     ]);
     console.log('Loaded Jobs:', JSON.stringify(jobsResponse.data, null, 2));
     console.log('Loaded Vehicles:', JSON.stringify(vehiclesResponse.data, null, 2));
     console.log('Loaded Results:', JSON.stringify(resultsResponse.data, null, 2));
-
+   console.log('Loaded Requests:', JSON.stringify(requestsResponse.data, null, 2));
     const validJobs = jobsResponse.data.filter(
       (job) =>
         job.id &&
@@ -87,6 +89,7 @@ const loadData = async () => {
     setJobs(validJobs);
     setVehicles(validVehicles);
     setResultsHistory(resultsResponse.data || []);
+    setRequests(requestsResponse.data || []);
     if (validJobs.length > 0) {
       setMapCenter({
         lat: parseFloat(validJobs[0].latitude),
@@ -738,7 +741,7 @@ const optimizeRoutes = async () => {
             </div>
           )}
         </div>
-
+        
         {/* Optimize Button */}
         <div className="mb-8">
           <button
@@ -749,6 +752,35 @@ const optimizeRoutes = async () => {
           </button>
         </div>
 
+        <div className="mb-8 bg-white p-6 rounded-lg shadow-lg">
+          <h2 className="text-2xl font-semibold text-gray-700 mb-4">Optimization Requests</h2>
+            {requests.length === 0 ? (
+            <p className="text-gray-600">ไม่มีrequest</p>
+          ) : (
+         <div className="overflow-x-auto">
+              <table className="min-w-full table-auto">
+        <thead>
+           <tr className="bg-blue-100">
+            <th className="text-left p-4">Job ID</th>
+            <th className="text-left p-4">Created At</th>
+            <th className="text-left p-4">Payload</th>
+          
+          </tr>
+        </thead>
+        <tbody>
+          {requests.map((request) => (
+             <tr key={request.id} className="border-t">
+              <td className="p-4" >{request.job_id}</td>
+              <td className="p-4">{new Date(request.created_at).toLocaleString()}</td>
+              <td className="p-4"> {JSON.stringify(request.payload, null, 2)}</td>
+             
+            </tr>
+          ))}
+           </tbody>
+              </table>
+            </div>
+          )}
+        </div>
         {/* Optimization Result */}
         {apiResponse && (
           <div className="mb-8 bg-white p-6 rounded-lg shadow-lg">
@@ -779,6 +811,10 @@ const optimizeRoutes = async () => {
             </div>
           )}
         </div>
+
+
+
+
       </div>
     </div>
   );
